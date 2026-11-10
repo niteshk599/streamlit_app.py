@@ -1,9 +1,7 @@
-# 1. Install dependencies and download Cloudflare
-!pip install streamlit yfinance pandas plotly -q
-!wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
-!chmod +x cloudflared
+# 1. Install dependencies
+!pip install streamlit yfinance pandas plotly pyngrok -q
 
-# 2. Write the app code
+# 2. Write the app code to a file
 app_code = """
 import streamlit as st
 import yfinance as yf
@@ -55,30 +53,37 @@ if not df.empty:
 with open("app.py", "w") as f:
     f.write(app_code)
 
-# 3. Start Streamlit in the background
+print("✅ App code written successfully!")
+
+# 3. Ask for Token Securely
+import getpass
+print("\n👉 Go to https://dashboard.ngrok.com/get-started/your-authtoken to get your token.")
+# This will create an input box in Colab for you to paste the token
+NGROK_TOKEN = getpass.getpass("Paste your ngrok token here and press Enter: ")
+
+# 4. Start the app and create a public link
+from pyngrok import ngrok
 import subprocess
 import time
-import re
+import os
 
-# Kill any previous streamlit instances
-!pkill streamlit
+if not NGROK_TOKEN:
+    print("❌ ERROR: No token provided.")
+else:
+    try:
+        ngrok.set_auth_token(NGROK_TOKEN.strip())
+        
+        # Kill any previous instances to prevent port errors
+        os.system("pkill streamlit")
+        
+        # Run Streamlit in background
+        subprocess.Popen(["streamlit", "run", "app.py", "--server.port", "8501", "--server.headless", "true"])
+        time.sleep(5)
 
-# Start Streamlit
-subprocess.Popen(["streamlit", "run", "app.py", "--server.port", "8501", "--server.headless", "true"])
-time.sleep(3)
-
-# 4. Start Cloudflare Tunnel in background
-print("Starting Cloudflare Tunnel...")
-!./cloudflared tunnel --url http://localhost:8501 &> cf_logs.txt &
-time.sleep(5)
-
-# 5. Extract and print the live URL
-with open("cf_logs.txt", "r") as f:
-    logs = f.read()
-    urls = re.findall(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', logs)
-    if urls:
-        print("\n" + "="*60)
-        print(f"✅ YOUR APP IS LIVE! Click here: {urls[0]}")
-        print("="*60 + "\n")
-    else:
-        print("❌ Error: Could not generate link. Please try running the cell again.")
+        # Generate public URL
+        public_url = ngrok.connect(8501).public_url
+        print("\n\n" + "="*50)
+        print(f"✅ YOUR APP IS LIVE! Click here: {public_url}")
+        print("="*50 + "\n\n")
+    except Exception as e:
+        print(f"❌ Authentication failed. Error: {e}")
